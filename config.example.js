@@ -5,8 +5,8 @@
  * Caso deixe os valores padrão, o sistema permitirá configurar diretamente pela tela inicial.
  */
 window.AUTOTECH_ENV = {
-  SUPABASE_URL: "https://SEU-PROJETO.supabase.co",
-  SUPABASE_ANON_KEY: "SUA-CHAVE-PUBLICA-ANON"
+  SUPABASE_URL: "https://sjzgkzyqftytvcictant.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable_uAcmmUFpYfk43jgWRNdF8A_y83en7Ct"
 };
 
 window.AutoTechConfig = (function () {
