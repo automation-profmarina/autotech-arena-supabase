@@ -1,0 +1,748 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoTech Arena — Plataforma Gamificada de Automação Industrial</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Supabase JS v2 -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!-- Chart.js para indicadores pedagógicos -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <!-- SheetJS (XLSX) para importação de alunos e exportação Excel -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!-- jsPDF + AutoTable para relatórios em PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body class="antialiased selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- TOAST NOTIFICATIONS -->
+  <div id="toast-container" class="fixed bottom-4 right-4 z-50 flex flex-col gap-2"></div>
+
+  <!-- CABEÇALHO GLOBAL IHM/SCADA -->
+  <header class="sticky top-0 z-40 bg-slate-950/90 backdrop-blur border-b border-slate-800">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-700 flex items-center justify-center font-display font-bold text-slate-950 text-lg shadow-lg shadow-cyan-500/20">
+          AT
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-display font-bold text-lg sm:text-xl tracking-wide text-white">
+              AUTOTECH <span class="text-cyan-400">ARENA</span>
+            </h1>
+            <span class="hidden sm:inline-block px-2 py-0.5 text-[10px] font-mono-tech rounded bg-slate-800 text-cyan-300 border border-slate-700">
+              SCADA EDU v2.0
+            </span>
+          </div>
+          <p class="text-[11px] text-slate-400 font-mono-tech">
+            Simulador &amp; Avaliação Gamificada • Automação Industrial
+          </p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2.5 flex-wrap">
+        <span id="active-role-label" class="text-xs font-mono-tech text-slate-300 hidden md:inline"></span>
+
+        <button type="button" id="btn-open-config-modal"
+          class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 flex items-center gap-2 text-xs font-mono-tech text-slate-200 transition cursor-pointer"
+          title="Configurar URL e Chave Pública do Supabase">
+          <span id="cloud-status-led" class="status-led led-warn"></span>
+          <span id="cloud-status-text">VERIFICANDO BANCO...</span>
+        </button>
+
+        <button type="button" id="btn-global-logout"
+          class="hidden px-3 py-1.5 rounded-lg bg-rose-950/80 hover:bg-rose-600 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-semibold transition cursor-pointer">
+          Sair / Trocar Perfil
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- BANNER DE CONFIGURAÇÃO INICIAL DO SUPABASE -->
+  <div id="supabase-setup-banner" class="hidden bg-amber-950/80 border-b border-amber-500/40">
+    <div class="max-w-7xl mx-auto px-4 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-100">
+      <div>
+        <strong>⚙️ Configuração Pendente:</strong> Conecte seu projeto <strong>Supabase</strong> (URL + Chave Pública Anon) para ativar o banco de dados e o ranking em tempo real.
+      </div>
+      <button type="button" onclick="document.getElementById('btn-open-config-modal').click()"
+        class="px-3 py-1 rounded bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold cursor-pointer">
+        Configurar Agora
+      </button>
+    </div>
+  </div>
+
+  <main class="max-w-7xl mx-auto px-4 py-6">
+
+    <!-- ========================================================================
+         1. PORTAL DE ACESSO HÍBRIDO (ALUNO POR PIN / PROFESSOR POR CONTA)
+         ======================================================================== -->
+    <section id="view-auth-portal" class="max-w-xl mx-auto mt-4">
+      <div class="scada-panel rounded-2xl p-6 sm:p-8">
+        <div class="text-center mb-6">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-mono-tech bg-cyan-950 text-cyan-300 border border-cyan-500/30 mb-3">
+            TERMINAL DE IDENTIFICAÇÃO OPERACIONAL
+          </span>
+          <h2 class="font-display text-2xl font-bold text-white">Bem-vindo ao AutoTech Arena</h2>
+          <p class="text-xs sm:text-sm text-slate-400 mt-1">
+            Selecione seu perfil abaixo para acessar os desafios técnicos ou o painel pedagógico.
+          </p>
+        </div>
+
+        <!-- Abas Aluno / Professor -->
+        <div class="grid grid-cols-2 gap-2 p-1 rounded-xl bg-slate-950 border border-slate-800 mb-6">
+          <button type="button" id="auth-tab-student"
+            class="py-2.5 rounded-lg bg-cyan-600 text-slate-950 font-bold text-xs sm:text-sm transition cursor-pointer">
+            🎓 Sou Aluno (Acesso PIN)
+          </button>
+          <button type="button" id="auth-tab-teacher"
+            class="py-2.5 rounded-lg text-slate-300 hover:text-white text-xs sm:text-sm transition cursor-pointer">
+            👨‍🏫 Sou Professor (Admin)
+          </button>
+        </div>
+
+        <!-- Formulário Aluno (Código da Turma + PIN Individual) -->
+        <div id="auth-student-box">
+          <form id="student-pin-login-form" class="space-y-4">
+            <div>
+              <label class="block text-xs font-mono-tech uppercase text-slate-300 mb-1.5">
+                Código da Turma (fornecido pelo professor)
+              </label>
+              <input type="text" id="login-class-code" required placeholder="Ex: AUT-2A"
+                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none font-mono-tech uppercase text-white tracking-wider" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono-tech uppercase text-slate-300 mb-1.5">
+                Seu PIN Individual (6 caracteres)
+              </label>
+              <input type="text" id="login-student-pin" required maxlength="8" placeholder="Ex: K7M49P"
+                class="w-full px-4 py-3 rounded-xl bg-slate-950 border border-slate-700 focus:border-cyan-400 focus:outline-none font-mono-tech uppercase text-amber-300 text-lg tracking-widest" />
+            </div>
+
+            <button type="submit"
+              class="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-display font-bold text-sm uppercase tracking-wider shadow-lg shadow-cyan-500/20 transition cursor-pointer">
+              Entrar na Bancada de Desafios ➔
+            </button>
+          </form>
+          <p class="text-[11px] text-slate-400 text-center mt-4">
+            Seu progresso, nível, medalhas e posição no ranking da turma são salvos automaticamente na nuvem.
+          </p>
+        </div>
+
+        <!-- Formulário Professor (Supabase Auth) -->
+        <div id="auth-teacher-box" class="hidden">
+          <form id="teacher-auth-form" class="space-y-4">
+            <div id="teacher-signup-fields" class="hidden space-y-4">
+              <div>
+                <label class="block text-xs font-mono-tech uppercase text-slate-300 mb-1">Nome Completo do Professor</label>
+                <input type="text" id="teacher-fullname" placeholder="Prof. Carlos Silva"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-amber-400 focus:outline-none text-sm text-white" />
+              </div>
+              <div>
+                <label class="block text-xs font-mono-tech uppercase text-slate-300 mb-1">Instituição / Escola Técnica</label>
+                <input type="text" id="teacher-institution" placeholder="SENAI / ETEC / IF — Automação Industrial"
+                  class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-amber-400 focus:outline-none text-sm text-white" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono-tech uppercase text-slate-300 mb-1">E-mail Institucional</label>
+              <input type="email" id="teacher-email" required placeholder="professor@escola.edu.br"
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-amber-400 focus:outline-none text-sm text-white" />
+            </div>
+
+            <div>
+              <label class="block text-xs font-mono-tech uppercase text-slate-300 mb-1">Senha</label>
+              <input type="password" id="teacher-password" required minlength="6" placeholder="Mínimo 6 caracteres"
+                class="w-full px-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 focus:border-amber-400 focus:outline-none text-sm text-white" />
+            </div>
+
+            <button type="submit" id="teacher-auth-submit-btn"
+              class="w-full py-3.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-display font-bold text-sm uppercase tracking-wider transition cursor-pointer">
+              Entrar no Painel Administrativo
+            </button>
+          </form>
+
+          <div class="text-center mt-4">
+            <button type="button" id="toggle-teacher-signup"
+              class="text-xs text-amber-300 hover:underline font-mono-tech cursor-pointer">
+              Primeiro acesso? Cadastrar Professor
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         2. AMBIENTE DO ALUNO — ÁREA DE APRENDIZAGEM GAMIFICADA
+         ======================================================================== -->
+    <section id="view-student-portal" class="hidden space-y-6">
+
+      <!-- 2A. DASHBOARD DO ALUNO -->
+      <div id="student-dashboard-view" class="space-y-6">
+        <!-- Crachá e Status Operacional -->
+        <div class="scada-panel rounded-2xl p-5 sm:p-6">
+          <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
+            <div class="lg:col-span-5 flex items-center gap-4">
+              <div id="student-avatar-display" class="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-slate-950 p-2 border-2 border-cyan-500/60 shrink-0"></div>
+              <div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span id="student-level-badge" class="px-2.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/50 text-amber-300 font-mono-tech font-bold text-xs">
+                    NÍVEL 1
+                  </span>
+                  <span id="student-class-badge" class="px-2.5 py-0.5 rounded bg-slate-800 text-cyan-300 font-mono-tech text-xs">
+                    TURMA
+                  </span>
+                </div>
+                <h2 id="student-name-display" class="font-display text-xl sm:text-2xl font-bold text-white mt-1">
+                  Operador
+                </h2>
+                <div class="mt-2">
+                  <div class="flex justify-between text-[11px] font-mono-tech text-slate-400 mb-1">
+                    <span id="student-xp-total" class="text-emerald-400 font-bold">0 XP</span>
+                    <span id="student-xp-progress-text">0 / 500 XP</span>
+                  </div>
+                  <div class="w-full h-2.5 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+                    <div id="student-xp-bar" class="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 transition-all duration-500" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Indicadores Individuais -->
+            <div class="lg:col-span-4 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-2 gap-3">
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div class="text-[10px] font-mono-tech text-slate-400 uppercase">Posição Turma</div>
+                <div id="student-stat-rank" class="font-display text-lg font-bold text-amber-400">-</div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div class="text-[10px] font-mono-tech text-slate-400 uppercase">Precisão Geral</div>
+                <div id="student-stat-accuracy" class="font-display text-lg font-bold text-cyan-300">0%</div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div class="text-[10px] font-mono-tech text-slate-400 uppercase">Desafios Feitos</div>
+                <div id="student-stat-quizzes" class="font-display text-lg font-bold text-white">0</div>
+              </div>
+              <div class="p-3 rounded-xl bg-slate-950/80 border border-slate-800">
+                <div class="text-[10px] font-mono-tech text-slate-400 uppercase">Melhor Combo</div>
+                <div id="student-stat-streak" class="font-display text-lg font-bold text-emerald-400">0</div>
+              </div>
+            </div>
+
+            <!-- Seletor Rápido de Avatar -->
+            <div class="lg:col-span-3">
+              <div class="text-[11px] font-mono-tech text-slate-400 uppercase mb-2">Personalizar Avatar Técnico</div>
+              <div id="student-avatar-options" class="grid grid-cols-4 gap-1.5"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Módulos Técnicos Disponíveis -->
+        <div>
+          <div class="flex items-center justify-between mb-3">
+            <h3 class="font-display text-lg font-bold text-white flex items-center gap-2">
+              <span class="text-cyan-400">⚡</span> Módulos de Treinamento &amp; Simulação
+            </h3>
+            <span class="text-xs font-mono-tech text-slate-400">Questões e alternativas embaralhadas</span>
+          </div>
+          <div id="student-modules-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+
+        <!-- Conquistas & Ranking Ao Vivo da Turma -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Medalhas -->
+          <div class="lg:col-span-5 scada-panel rounded-2xl p-5">
+            <h3 class="font-display text-base font-bold text-white mb-3">🏅 Minhas Conquistas &amp; Medalhas</h3>
+            <div id="student-badges-grid" class="grid grid-cols-1 sm:grid-cols-2 gap-2.5"></div>
+          </div>
+
+          <!-- Ranking Ao Vivo -->
+          <div class="lg:col-span-7 scada-panel rounded-2xl p-5">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-display text-base font-bold text-white flex items-center gap-2">
+                <span class="status-led led-online"></span> Ranking Ao Vivo da Turma
+              </h3>
+              <span class="text-[11px] font-mono-tech text-emerald-400">Atualização Automática</span>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left border-collapse">
+                <thead>
+                  <tr class="border-b border-slate-800 text-[11px] font-mono-tech text-slate-400 uppercase">
+                    <th class="py-2 px-3">Pos</th>
+                    <th class="py-2 px-3">Operador</th>
+                    <th class="py-2 px-3">Nível</th>
+                    <th class="py-2 px-3">Precisão</th>
+                    <th class="py-2 px-3">Desafios</th>
+                    <th class="py-2 px-3 text-right">Pontuação</th>
+                  </tr>
+                </thead>
+                <tbody id="student-leaderboard-body"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <!-- Histórico de Atividades do Aluno -->
+        <div class="scada-panel rounded-2xl p-5">
+          <h3 class="font-display text-base font-bold text-white mb-3">📈 Meu Histórico &amp; Evolução</h3>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-800 text-[11px] font-mono-tech text-slate-400 uppercase">
+                  <th class="py-2 px-3">Data / Hora</th>
+                  <th class="py-2 px-3">Módulo</th>
+                  <th class="py-2 px-3">Desempenho</th>
+                  <th class="py-2 px-3">Tempo</th>
+                  <th class="py-2 px-3 text-right">XP Conquistado</th>
+                </tr>
+              </thead>
+              <tbody id="student-history-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2B. ARENA DE DESAFIO ATIVO -->
+      <div id="student-arena-view" class="hidden max-w-3xl mx-auto">
+        <div class="scada-panel rounded-2xl p-5 sm:p-7 space-y-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <div id="arena-question-counter" class="text-xs font-mono-tech text-cyan-400 font-bold">DESAFIO 1 DE 5</div>
+              <h2 id="arena-module-title" class="font-display text-lg sm:text-xl font-bold text-white">Módulo</h2>
+            </div>
+            <div class="flex items-center gap-3">
+              <span id="arena-streak-badge" class="px-3 py-1 rounded-lg bg-amber-950/70 border border-amber-500/40 text-amber-300 font-mono-tech text-xs font-bold">
+                🔥 COMBO: 0x
+              </span>
+              <button type="button" onclick="window.StudentUI.backToDashboard()"
+                class="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-xs text-slate-300 cursor-pointer">
+                Abandonar
+              </button>
+            </div>
+          </div>
+
+          <!-- Barra de Tempo -->
+          <div>
+            <div class="flex justify-between text-xs font-mono-tech mb-1">
+              <span class="text-slate-400">TEMPO RESTANTE DO PROCESSO</span>
+              <span id="arena-timer-text" class="font-bold text-white">25s</span>
+            </div>
+            <div class="w-full h-3 rounded-full bg-slate-950 overflow-hidden border border-slate-800">
+              <div id="arena-timer-bar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 100%"></div>
+            </div>
+          </div>
+
+          <!-- Contexto & Objetivo -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800">
+              <div class="text-[10px] font-mono-tech text-cyan-400 uppercase font-bold mb-1">🏭 Contexto Industrial</div>
+              <p id="arena-context-text" class="text-xs text-slate-300 leading-relaxed"></p>
+            </div>
+            <div class="p-3.5 rounded-xl bg-slate-950/90 border border-slate-800">
+              <div class="text-[10px] font-mono-tech text-amber-400 uppercase font-bold mb-1">🎯 Objetivo Técnico</div>
+              <p id="arena-objective-text" class="text-xs text-slate-300 leading-relaxed"></p>
+            </div>
+          </div>
+
+          <!-- Diagrama Esquemático Interativo -->
+          <div class="p-4 rounded-xl bg-slate-950 border border-slate-800">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-mono-tech text-slate-400 uppercase">Sinótico IHM / Esquema Técnico</span>
+              <button type="button" id="arena-inspect-btn"
+                class="px-3 py-1 rounded-lg bg-cyan-950 hover:bg-cyan-900 border border-cyan-500/40 text-cyan-300 text-xs font-mono-tech transition cursor-pointer">
+                🔍 Inspecionar / Simular Sinal
+              </button>
+            </div>
+            <div id="arena-svg-container" class="flex items-center justify-center"></div>
+          </div>
+
+          <!-- Pergunta e Alternativas -->
+          <div>
+            <h3 id="arena-question-text" class="text-base sm:text-lg font-semibold text-white mb-4 leading-snug"></h3>
+            <div id="arena-options-container" class="space-y-2.5"></div>
+          </div>
+
+          <!-- Feedback Técnico -->
+          <div id="arena-feedback-panel" class="hidden p-4 rounded-xl bg-slate-950 border">
+            <div id="arena-feedback-title"></div>
+            <p id="arena-feedback-text" class="text-xs sm:text-sm text-slate-300 leading-relaxed mb-4"></p>
+            <div class="flex justify-end">
+              <button type="button" id="arena-next-btn"
+                class="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-display font-bold text-xs uppercase tracking-wider cursor-pointer">
+                Próximo Desafio ➔
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2C. TELA DE RESULTADO DO DESAFIO -->
+      <div id="student-result-view" class="hidden max-w-xl mx-auto">
+        <div class="scada-panel rounded-2xl p-6 sm:p-8 text-center space-y-5">
+          <div class="w-16 h-16 mx-auto rounded-2xl bg-emerald-950 border border-emerald-500/40 flex items-center justify-center text-3xl">
+            🏆
+          </div>
+          <div>
+            <div class="text-xs font-mono-tech text-cyan-400 uppercase">Relatório de Execução</div>
+            <h2 id="result-module-name" class="font-display text-2xl font-bold text-white mt-1">Módulo Concluído</h2>
+          </div>
+
+          <div class="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+            <div id="result-score-fraction" class="text-base font-semibold text-slate-200"></div>
+            <div id="result-xp-earned" class="font-display text-3xl font-bold text-emerald-400">+0 XP</div>
+            <div id="result-xp-breakdown" class="text-xs font-mono-tech text-slate-400"></div>
+          </div>
+
+          <div id="result-sync-status" class="text-xs font-mono-tech text-cyan-300"></div>
+
+          <button type="button" onclick="window.StudentUI.backToDashboard()"
+            class="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-display font-bold text-sm uppercase tracking-wider cursor-pointer">
+            Voltar ao Painel &amp; Ver Ranking Ao Vivo
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         3. AMBIENTE DO PROFESSOR — PAINEL ADMINISTRATIVO E PEDAGÓGICO
+         ======================================================================== -->
+    <section id="view-teacher-portal" class="hidden space-y-6">
+      <!-- Barra Superior de Controle de Turma -->
+      <div class="scada-panel rounded-2xl p-4 sm:p-5 flex flex-wrap items-center justify-between gap-4">
+        <div class="flex flex-wrap items-center gap-3">
+          <div>
+            <label class="block text-[10px] font-mono-tech text-slate-400 uppercase">Turma Selecionada</label>
+            <select id="teacher-class-selector"
+              class="mt-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm font-semibold text-white focus:border-cyan-400 focus:outline-none">
+            </select>
+          </div>
+          <span id="active-class-code-pill"
+            class="px-3 py-2 rounded-xl bg-cyan-950 border border-cyan-500/40 font-mono-tech font-bold text-xs text-cyan-300 self-end">
+            CÓDIGO: -
+          </span>
+        </div>
+
+        <!-- Sub-navegação do Professor -->
+        <div class="flex flex-wrap gap-1.5 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+          <button type="button" data-teacher-tab="overview"
+            class="teacher-tab-btn px-3.5 py-2 rounded-lg bg-cyan-600 text-slate-950 font-bold text-xs transition cursor-pointer">
+            📊 Indicadores &amp; Gráficos
+          </button>
+          <button type="button" data-teacher-tab="classes"
+            class="teacher-tab-btn px-3.5 py-2 rounded-lg text-slate-300 hover:text-white text-xs transition cursor-pointer">
+            👥 Turmas, Alunos &amp; PINs
+          </button>
+          <button type="button" data-teacher-tab="ranking"
+            class="teacher-tab-btn px-3.5 py-2 rounded-lg text-slate-300 hover:text-white text-xs transition cursor-pointer">
+            🏆 Ranking Ao Vivo
+          </button>
+          <button type="button" data-teacher-tab="reports"
+            class="teacher-tab-btn px-3.5 py-2 rounded-lg text-slate-300 hover:text-white text-xs transition cursor-pointer">
+            📑 Relatórios (PDF / Excel)
+          </button>
+        </div>
+      </div>
+
+      <!-- ABA 3.1: INDICADORES VISUAIS E GRÁFICOS PEDAGÓGICOS -->
+      <div id="teacher-panel-overview" class="teacher-tab-panel space-y-6">
+        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <div class="scada-panel rounded-xl p-4">
+            <div class="text-[11px] font-mono-tech text-slate-400 uppercase">Total de Alunos</div>
+            <div id="kpi-total-students" class="font-display text-2xl font-bold text-white mt-1">0</div>
+          </div>
+          <div class="scada-panel rounded-xl p-4">
+            <div class="text-[11px] font-mono-tech text-slate-400 uppercase">Participação</div>
+            <div id="kpi-participation" class="font-display text-2xl font-bold text-cyan-300 mt-1">0%</div>
+          </div>
+          <div class="scada-panel rounded-xl p-4">
+            <div class="text-[11px] font-mono-tech text-slate-400 uppercase">Média de Acertos</div>
+            <div id="kpi-avg-accuracy" class="font-display text-2xl font-bold text-emerald-400 mt-1">0%</div>
+          </div>
+          <div class="scada-panel rounded-xl p-4">
+            <div class="text-[11px] font-mono-tech text-slate-400 uppercase">Desafios Concluídos</div>
+            <div id="kpi-total-attempts" class="font-display text-2xl font-bold text-amber-400 mt-1">0</div>
+          </div>
+          <div class="scada-panel rounded-xl p-4 col-span-2 sm:col-span-1">
+            <div class="text-[11px] font-mono-tech text-slate-400 uppercase">Recorde da Turma</div>
+            <div id="kpi-top-xp" class="font-display text-2xl font-bold text-purple-300 mt-1">0 XP</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div class="scada-panel rounded-2xl p-5">
+            <h3 class="font-display text-base font-bold text-white mb-1">Aproveitamento por Área Técnica (%)</h3>
+            <p class="text-xs text-slate-400 mb-4">Identifique rapidamente os conteúdos com maior dificuldade na turma.</p>
+            <div class="h-64">
+              <canvas id="chart-modules-performance"></canvas>
+            </div>
+          </div>
+
+          <div class="scada-panel rounded-2xl p-5">
+            <h3 class="font-display text-base font-bold text-white mb-1">Top 10 Estudantes por XP Acumulado</h3>
+            <p class="text-xs text-slate-400 mb-4">Líderes de pontuação na turma selecionada.</p>
+            <div class="h-64">
+              <canvas id="chart-top-students"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABA 3.2: TURMAS, CADASTRO/IMPORTAÇÃO DE ALUNOS E PINs -->
+      <div id="teacher-panel-classes" class="teacher-tab-panel hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Gerenciar Turmas -->
+          <div class="lg:col-span-5 scada-panel rounded-2xl p-5 space-y-4">
+            <h3 class="font-display text-base font-bold text-white">🏫 Criar Nova Turma</h3>
+            <form id="teacher-create-class-form" class="space-y-3">
+              <div>
+                <label class="block text-[11px] font-mono-tech text-slate-400 uppercase mb-1">Nome da Turma</label>
+                <input type="text" id="new-class-name" required placeholder="Ex: 2º Ano A - Automação Industrial"
+                  class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white" />
+              </div>
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-mono-tech text-slate-400 uppercase mb-1">Código Único</label>
+                  <input type="text" id="new-class-code" required placeholder="Ex: AUT-2A"
+                    class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 font-mono-tech uppercase text-sm text-cyan-300" />
+                </div>
+                <div>
+                  <label class="block text-[11px] font-mono-tech text-slate-400 uppercase mb-1">Ano Letivo</label>
+                  <input type="text" id="new-class-year" value="2026" required
+                    class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 font-mono-tech text-sm text-white" />
+                </div>
+              </div>
+              <button type="submit"
+                class="w-full py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs uppercase tracking-wider cursor-pointer">
+                + Criar Turma
+              </button>
+            </form>
+
+            <div class="pt-3 border-t border-slate-800">
+              <div class="text-xs font-mono-tech text-slate-400 uppercase mb-2">Minhas Turmas Cadastradas</div>
+              <div id="teacher-classes-list" class="space-y-2 max-h-60 overflow-y-auto"></div>
+            </div>
+          </div>
+
+          <!-- Cadastrar / Importar Alunos -->
+          <div class="lg:col-span-7 scada-panel rounded-2xl p-5 space-y-5">
+            <div>
+              <h3 class="font-display text-base font-bold text-white mb-3">👤 Cadastro Individual de Aluno</h3>
+              <form id="teacher-add-student-form" class="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                <div class="sm:col-span-6">
+                  <input type="text" id="new-student-name" required placeholder="Nome completo do aluno"
+                    class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-sm text-white" />
+                </div>
+                <div class="sm:col-span-3">
+                  <input type="text" id="new-student-reg" placeholder="Matrícula (opcional)"
+                    class="w-full px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 font-mono-tech text-sm text-white" />
+                </div>
+                <div class="sm:col-span-3">
+                  <button type="submit"
+                    class="w-full h-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs uppercase cursor-pointer">
+                    + Gerar PIN
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <div class="pt-4 border-t border-slate-800">
+              <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                <h3 class="font-display text-base font-bold text-white">📥 Importar Lista por Planilha (Excel / CSV)</h3>
+                <a href="modelo_importacao_alunos.csv" download
+                  class="text-xs font-mono-tech text-cyan-400 hover:underline">
+                  ⬇ Baixar Planilha Modelo (.csv)
+                </a>
+              </div>
+              <p class="text-xs text-slate-400 mb-3">
+                Envie um arquivo <strong>.xlsx</strong>, <strong>.xls</strong> ou <strong>.csv</strong> contendo as colunas <code class="text-cyan-300">Nome</code> e <code class="text-cyan-300">Matricula</code> (opcional). Os PINs serão gerados automaticamente.
+              </p>
+              <input type="file" id="teacher-import-file" accept=".csv,.xlsx,.xls"
+                class="block w-full text-xs text-slate-300 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-bold file:bg-slate-800 file:text-cyan-300 hover:file:bg-slate-700 cursor-pointer" />
+
+              <div id="teacher-import-preview-box" class="hidden mt-3 p-3 rounded-xl bg-emerald-950/40 border border-emerald-500/40 flex items-center justify-between gap-3">
+                <span id="teacher-import-count" class="text-xs font-mono-tech text-emerald-300 font-bold"></span>
+                <button type="button" id="teacher-confirm-import-btn"
+                  class="px-4 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase cursor-pointer">
+                  Confirmar Importação em Lote
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tabela Oficial de Alunos & PINs da Turma -->
+        <div class="scada-panel rounded-2xl p-5">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+            <div>
+              <h3 class="font-display text-base font-bold text-white">🔑 Credenciais de Acesso (PINs Individuais)</h3>
+              <p class="text-xs text-slate-400">Cada aluno acessa usando o Código da Turma + seu PIN exclusivo.</p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2">
+              <input type="text" id="teacher-student-search" placeholder="Buscar aluno ou PIN..."
+                class="px-3 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-xs text-white" />
+              <button type="button" id="btn-print-pins"
+                class="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs cursor-pointer">
+                🖨️ Imprimir Cartões PIN
+              </button>
+              <button type="button" id="btn-export-pins-xlsx"
+                class="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs cursor-pointer">
+                📊 Exportar PINs (.xlsx)
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-800 text-[11px] font-mono-tech text-slate-400 uppercase">
+                  <th class="py-2.5 px-3">Aluno / Matrícula</th>
+                  <th class="py-2.5 px-3">PIN Individual</th>
+                  <th class="py-2.5 px-3">Nível</th>
+                  <th class="py-2.5 px-3">XP Total</th>
+                  <th class="py-2.5 px-3">Desafios</th>
+                  <th class="py-2.5 px-3">Precisão</th>
+                  <th class="py-2.5 px-3 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-students-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABA 3.3: RANKING AO VIVO & MODO PROJETOR -->
+      <div id="teacher-panel-ranking" class="teacher-tab-panel hidden">
+        <div id="teacher-live-ranking-container" class="scada-panel rounded-2xl p-5 sm:p-6 space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="status-led led-online"></span>
+                <span class="text-xs font-mono-tech text-emerald-400 uppercase font-bold">
+                  Transmissão em Tempo Real • Supabase Realtime
+                </span>
+              </div>
+              <h2 id="teacher-projector-class-title" class="font-display text-xl sm:text-2xl font-bold text-white mt-1">
+                Ranking Ao Vivo da Turma
+              </h2>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2">
+              <button type="button" id="btn-toggle-projector"
+                class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs uppercase tracking-wider cursor-pointer">
+                🖥️ Modo Projetor (Tela Cheia)
+              </button>
+              <button type="button" id="btn-reset-class-scores"
+                class="px-3.5 py-2 rounded-xl bg-rose-950/80 hover:bg-rose-600 border border-rose-500/40 text-rose-200 hover:text-white text-xs font-semibold cursor-pointer">
+                Zerar Pontuações
+              </button>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="border-b border-slate-800 text-xs font-mono-tech text-slate-400 uppercase">
+                  <th class="py-3 px-4">Posição</th>
+                  <th class="py-3 px-4">Estudante</th>
+                  <th class="py-3 px-4">Nível</th>
+                  <th class="py-3 px-4">Conquistas</th>
+                  <th class="py-3 px-4">Precisão</th>
+                  <th class="py-3 px-4 text-right">Pontuação Acumulada</th>
+                </tr>
+              </thead>
+              <tbody id="teacher-live-ranking-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- ABA 3.4: RELATÓRIOS PEDAGÓGICOS E EXPORTAÇÕES (PDF / EXCEL) -->
+      <div id="teacher-panel-reports" class="teacher-tab-panel hidden space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <!-- Relatório Coletivo da Turma -->
+          <div class="scada-panel rounded-2xl p-5 space-y-4">
+            <h3 class="font-display text-lg font-bold text-white">📋 Relatório Coletivo da Turma</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Gera o consolidado completo da turma contendo classificação geral, aproveitamento médio por módulo técnico (Portas Lógicas, CLP, Sensores, Variáveis Físicas, Pneumática e Motores) e histórico cronológico de atividades.
+            </p>
+            <div class="flex flex-wrap gap-3 pt-2">
+              <button type="button" id="btn-export-class-xlsx"
+                class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold text-xs uppercase tracking-wider cursor-pointer">
+                📊 Exportar Planilha Excel (.xlsx)
+              </button>
+              <button type="button" id="btn-export-class-pdf"
+                class="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider cursor-pointer">
+                📄 Exportar Relatório PDF (.pdf)
+              </button>
+            </div>
+          </div>
+
+          <!-- Relatório Individual por Aluno -->
+          <div class="scada-panel rounded-2xl p-5 space-y-4">
+            <h3 class="font-display text-lg font-bold text-white">🎓 Boletim Individual do Estudante</h3>
+            <div class="flex flex-wrap gap-2">
+              <select id="report-student-selector"
+                class="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-700 text-xs text-white">
+              </select>
+              <button type="button" id="btn-export-student-pdf"
+                class="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold text-xs uppercase cursor-pointer">
+                📄 Baixar Boletim PDF
+              </button>
+            </div>
+            <div id="individual-report-preview"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- MODAL DE CONFIGURAÇÃO DA CONEXÃO SUPABASE -->
+  <div id="supabase-config-modal" class="hidden fixed inset-0 z-50 bg-slate-950/85 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="scada-panel rounded-2xl max-w-lg w-full p-6 space-y-4">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+        <h3 class="font-display text-lg font-bold text-white">🔌 Conexão com Banco de Dados Supabase</h3>
+        <button type="button" id="btn-close-config-modal" class="text-slate-400 hover:text-white text-lg cursor-pointer">✕</button>
+      </div>
+
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Insira a <strong>Project URL</strong> e a chave pública <strong>anon / public</strong> do seu projeto Supabase (encontradas em <em>Project Settings → API</em>). Para distribuição permanente aos alunos, preencha também o arquivo <code class="text-cyan-300">js/config.js</code>.
+      </p>
+
+      <form id="supabase-config-form" class="space-y-3">
+        <div>
+          <label class="block text-[11px] font-mono-tech text-slate-400 uppercase mb-1">Supabase Project URL</label>
+          <input type="url" id="cfg-supabase-url" required placeholder="https://seu-projeto.supabase.co"
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 font-mono-tech text-xs text-cyan-300" />
+        </div>
+        <div>
+          <label class="block text-[11px] font-mono-tech text-slate-400 uppercase mb-1">Supabase Anon / Public Key</label>
+          <input type="text" id="cfg-supabase-key" required placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
+            class="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 font-mono-tech text-xs text-amber-300" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button type="submit"
+            class="px-5 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold text-xs uppercase cursor-pointer">
+            Salvar e Conectar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- SCRIPTS MODULARES -->
+  <script src="js/config.js"></script>
+  <script src="js/questions.js"></script>
+  <script src="js/supabase-service.js"></script>
+  <script src="js/reports.js"></script>
+  <script src="js/ui-student.js"></script>
+  <script src="js/ui-teacher.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
